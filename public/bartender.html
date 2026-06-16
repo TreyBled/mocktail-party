@@ -146,6 +146,29 @@
       font-size: 0.8rem;
       min-width: 30px;
     }
+
+    /* Search bar style */
+    .search-input {
+      width: 100%;
+      padding: 0.5rem 1rem;
+      margin-bottom: 1rem;
+      background: var(--color-surface);
+      border: 1px solid rgba(0, 217, 255, 0.2);
+      border-radius: 12px;
+      color: var(--color-text);
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--color-neon-cyan);
+      box-shadow: 0 0 12px rgba(0, 217, 255, 0.2);
+      background: rgba(0, 217, 255, 0.05);
+    }
+    .search-input::placeholder {
+      color: var(--color-text-dim);
+      opacity: 0.7;
+    }
   </style>
 </head>
 <body>
@@ -158,6 +181,7 @@
       <!-- Wet Ingredients -->
       <div class="card">
         <h2>💧 Wet Ingredients</h2>
+        <input type="text" id="wet-search" class="search-input" placeholder="🔍 Search wet ingredients...">
         <div id="wet-list" style="min-height: 100px;"></div>
         <hr>
         <form id="add-wet-form">
@@ -172,6 +196,7 @@
       <!-- Dry Ingredients -->
       <div class="card">
         <h2>🍂 Dry Ingredients</h2>
+        <input type="text" id="dry-search" class="search-input" placeholder="🔍 Search dry ingredients...">
         <div id="dry-list" style="min-height: 100px;"></div>
         <hr>
         <form id="add-dry-form">
@@ -191,7 +216,8 @@
           <textarea id="drink-desc" placeholder="Brief description" rows="2"></textarea>
           <textarea id="drink-instr" placeholder="Instructions (how to prepare)" rows="3"></textarea>
           <div id="ingredient-selector" style="background: rgba(0, 217, 255, 0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 217, 255, 0.1);">
-            <p style="margin-bottom: 1rem;"><strong>Select Ingredients & enter amount in the ingredient's unit</strong></p>
+            <p style="margin-bottom: 0.5rem;"><strong>Select Ingredients & enter amount in the ingredient's unit</strong></p>
+            <input type="text" id="ingredient-search" class="search-input" placeholder="🔍 Search ingredients..." style="margin-bottom: 0.8rem;">
             <div id="ingredient-checkboxes" style="max-height: 300px; overflow-y: auto;"></div>
           </div>
           <button type="submit" class="primary" style="margin-top: 0.5rem;">Create Recipe</button>
@@ -322,6 +348,51 @@
     }
   }
 
+  // ---------- Filter functions ----------
+  function filterList(containerId, searchId, itemSelector, textSelector) {
+    const search = document.getElementById(searchId);
+    if (!search) return;
+    const term = search.value.toLowerCase().trim();
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const items = container.querySelectorAll(itemSelector);
+    items.forEach(item => {
+      const textEl = item.querySelector(textSelector);
+      if (!textEl) return;
+      const name = textEl.textContent.toLowerCase();
+      if (term === '' || name.includes(term)) {
+        item.style.display = '';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+  }
+
+  // Attach filter events after DOM is ready
+  document.addEventListener('DOMContentLoaded', function() {
+    // Wet search
+    const wetSearch = document.getElementById('wet-search');
+    if (wetSearch) {
+      wetSearch.addEventListener('input', function() {
+        filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
+      });
+    }
+    // Dry search
+    const drySearch = document.getElementById('dry-search');
+    if (drySearch) {
+      drySearch.addEventListener('input', function() {
+        filterList('dry-list', 'dry-search', '.ingredient-item', 'span strong');
+      });
+    }
+    // Ingredient search in create drink
+    const ingSearch = document.getElementById('ingredient-search');
+    if (ingSearch) {
+      ingSearch.addEventListener('input', function() {
+        filterList('ingredient-checkboxes', 'ingredient-search', '.ing-check-wrapper', 'span');
+      });
+    }
+  });
+
   // ---------- Load ingredients ----------
   async function loadIngredients() {
     const now = Date.now();
@@ -347,6 +418,8 @@
             </div>
           </div>
         `).join('');
+        // Re-apply filter
+        filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
       }
     }
 
@@ -371,6 +444,8 @@
             </div>
           </div>
         `).join('');
+        // Re-apply filter
+        filterList('dry-list', 'dry-search', '.ingredient-item', 'span strong');
       }
     }
 
@@ -382,7 +457,7 @@
         checkDiv.innerHTML = '<p style="color: #8B8680;">Add ingredients first</p>';
       } else {
         checkDiv.innerHTML = allIngredients.map(ing => `
-          <div class="ing-check-wrapper">
+          <div class="ing-check-wrapper" data-ingredient-name="${ing.name.toLowerCase()}">
             <label>
               <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}" onchange="toggleQuantityInput(this)">
               <span>${ing.name} <em>(${ing.type})</em></span>
@@ -391,6 +466,8 @@
             <span class="unit-hint">${ing.unit || ''}</span>
           </div>
         `).join('');
+        // Re-apply filter
+        filterList('ingredient-checkboxes', 'ingredient-search', '.ing-check-wrapper', 'span');
       }
     }
 

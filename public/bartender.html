@@ -107,6 +107,46 @@
       flex: 1;
       margin: 0;
     }
+
+    /* Quantity input for drink creation */
+    .ing-check-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      width: 100%;
+    }
+    .ing-check-wrapper label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      cursor: pointer;
+      margin: 0;
+    }
+    .ing-check-wrapper input[type="number"] {
+      width: 60px;
+      padding: 0.3rem 0.5rem;
+      margin: 0;
+      background: var(--color-surface);
+      border: 1px solid rgba(0, 217, 255, 0.2);
+      border-radius: 8px;
+      color: var(--color-text);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    .ing-check-wrapper input[type="number"]:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .ing-check-wrapper input[type="number"]:focus {
+      border-color: var(--color-neon-cyan);
+      outline: none;
+    }
+    .ing-check-wrapper .unit-label {
+      color: var(--color-text-dim);
+      font-size: 0.8rem;
+      min-width: 24px;
+    }
   </style>
 </head>
 <body>
@@ -152,7 +192,7 @@
           <textarea id="drink-desc" placeholder="Brief description" rows="2"></textarea>
           <textarea id="drink-instr" placeholder="Instructions (how to prepare)" rows="3"></textarea>
           <div id="ingredient-selector" style="background: rgba(0, 217, 255, 0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 217, 255, 0.1);">
-            <p style="margin-bottom: 1rem;"><strong>Select Ingredients</strong></p>
+            <p style="margin-bottom: 1rem;"><strong>Select Ingredients (enter amount in oz)</strong></p>
             <div id="ingredient-checkboxes" style="max-height: 300px; overflow-y: auto;"></div>
           </div>
           <button type="submit" class="primary" style="margin-top: 0.5rem;">Create Recipe</button>
@@ -285,8 +325,10 @@
 
   // ---------- Load ingredients ----------
   async function loadIngredients() {
+    const now = Date.now();
+
     // Wet
-    const wet = await fetchJSON('/api/ingredients/wet');
+    const wet = await fetchJSON(`/api/ingredients/wet?_=${now}`);
     if (wet) {
       const wetContainer = document.getElementById('wet-list');
       if (wet.length === 0) {
@@ -310,7 +352,7 @@
     }
 
     // Dry
-    const dry = await fetchJSON('/api/ingredients/dry');
+    const dry = await fetchJSON(`/api/ingredients/dry?_=${now}`);
     if (dry) {
       const dryContainer = document.getElementById('dry-list');
       if (dry.length === 0) {
@@ -333,7 +375,7 @@
       }
     }
 
-    // Populate ingredient checkboxes for "Add Drink"
+    // Populate ingredient checkboxes for "Add Drink" – now with quantity input
     if (wet && dry) {
       const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
       const checkDiv = document.getElementById('ingredient-checkboxes');
@@ -341,17 +383,27 @@
         checkDiv.innerHTML = '<p style="color: #8B8680;">Add ingredients first</p>';
       } else {
         checkDiv.innerHTML = allIngredients.map(ing => `
-          <div class="ingredient-item" style="margin: 0.3rem 0;">
-            <label>
-              <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}">
+          <div class="ing-check-wrapper" style="display: flex; align-items: center; gap: 0.8rem; margin: 0.4rem 0;">
+            <label style="flex: 1; display: flex; align-items: center; gap: 0.6rem; cursor: pointer; margin: 0;">
+              <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}" onchange="toggleQuantityInput(this)">
               <span>${ing.name} <em>(${ing.type})</em></span>
             </label>
+            <input type="number" class="ing-quantity" min="0" step="0.25" value="1" disabled style="width: 60px; padding: 0.3rem 0.5rem; margin: 0; background: var(--color-surface); border: 1px solid rgba(0, 217, 255, 0.2); border-radius: 8px; color: var(--color-text); text-align: center;">
+            <span class="unit-label" style="color: var(--color-text-dim); font-size: 0.8rem; min-width: 24px;">oz</span>
           </div>
         `).join('');
       }
     }
 
     updateStats();
+  }
+
+  // Enable/disable quantity input based on checkbox
+  function toggleQuantityInput(checkbox) {
+    const wrapper = checkbox.closest('.ing-check-wrapper');
+    const qtyInput = wrapper.querySelector('.ing-quantity');
+    qtyInput.disabled = !checkbox.checked;
+    if (!checkbox.checked) qtyInput.value = '';
   }
 
   // ---------- Toggle ingredient ----------
@@ -461,11 +513,16 @@
     if (!name) return;
 
     const checkboxes = document.querySelectorAll('.ing-check:checked');
-    const ingredients = Array.from(checkboxes).map(cb => ({
-      type: cb.dataset.type,
-      id: parseInt(cb.dataset.id),
-      quantity: ''
-    }));
+    const ingredients = Array.from(checkboxes).map(cb => {
+      const wrapper = cb.closest('.ing-check-wrapper');
+      const qtyInput = wrapper.querySelector('.ing-quantity');
+      const quantity = qtyInput.value ? parseFloat(qtyInput.value) : '';
+      return {
+        type: cb.dataset.type,
+        id: parseInt(cb.dataset.id),
+        quantity: quantity !== '' ? quantity.toString() : ''
+      };
+    });
 
     if (ingredients.length === 0) {
       showToast('Please select at least one ingredient', true);
@@ -482,7 +539,13 @@
       document.getElementById('drink-name').value = '';
       document.getElementById('drink-desc').value = '';
       document.getElementById('drink-instr').value = '';
-      document.querySelectorAll('.ing-check:checked').forEach(cb => cb.checked = false);
+      document.querySelectorAll('.ing-check:checked').forEach(cb => {
+        cb.checked = false;
+        const wrapper = cb.closest('.ing-check-wrapper');
+        const qtyInput = wrapper.querySelector('.ing-quantity');
+        qtyInput.disabled = true;
+        qtyInput.value = '';
+      });
       showToast('Recipe created!');
       updateStats();
     } else {

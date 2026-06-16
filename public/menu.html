@@ -58,16 +58,27 @@
     }
 
     emptyState.style.display = 'none';
-    container.innerHTML = drinks.map((d, index) => `
-      <div class="drink-card" style="animation-delay: ${index * 0.1}s">
-        <div class="drink-info">
-          <h3>${d.name}</h3>
-          ${d.description ? `<p>${d.description}</p>` : ''}
-          ${d.ingredients && d.ingredients.length > 0 ? `<small>📌 ${d.ingredients.map(i => i.name).join(' • ')}</small>` : ''}
+    container.innerHTML = drinks.map((d, index) => {
+      // Build ingredient list with quantity & oz
+      const ingredientsHtml = d.ingredients && d.ingredients.length > 0
+        ? d.ingredients.map(i => {
+            const qty = i.quantity ? parseFloat(i.quantity) : '';
+            const qtyDisplay = qty ? `${qty} oz` : '';
+            return `${i.name}${qtyDisplay ? ` (${qtyDisplay})` : ''}`;
+          }).join(' • ')
+        : '';
+
+      return `
+        <div class="drink-card" style="animation-delay: ${index * 0.1}s">
+          <div class="drink-info">
+            <h3>${d.name}</h3>
+            ${d.description ? `<p>${d.description}</p>` : ''}
+            ${ingredientsHtml ? `<small>📌 ${ingredientsHtml}</small>` : ''}
+          </div>
+          <button class="primary" onclick="orderDrink(${d.id})" style="white-space: nowrap;">Order Now</button>
         </div>
-        <button class="primary" onclick="orderDrink(${d.id})" style="white-space: nowrap;">Order Now</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
   }
 
   async function orderDrink(drinkId) {

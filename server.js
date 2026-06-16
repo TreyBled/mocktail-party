@@ -99,14 +99,15 @@ app.delete('/api/ingredients/:type/:id', async (req, res) => {
 
 // ---------- DRINK ENDPOINTS ----------
 
-// Get all drinks with their ingredients
+// Get all drinks with their ingredients (including unit)
 app.get('/api/drinks', async (req, res) => {
   try {
     const drinks = await query('SELECT * FROM drinks ORDER BY name');
     for (let drink of drinks) {
       const ingredients = await query(`
         SELECT di.ingredient_type, di.ingredient_id, di.quantity,
-               CASE WHEN di.ingredient_type = 'wet' THEN wi.name ELSE di2.name END as name
+               CASE WHEN di.ingredient_type = 'wet' THEN wi.name ELSE di2.name END as name,
+               CASE WHEN di.ingredient_type = 'wet' THEN wi.unit ELSE di2.unit END as unit
         FROM drink_ingredients di
         LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
         LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
@@ -120,7 +121,7 @@ app.get('/api/drinks', async (req, res) => {
   }
 });
 
-// Get only available drinks
+// Get only available drinks (all ingredients active) – includes unit
 app.get('/api/available-drinks', async (req, res) => {
   try {
     const drinks = await query('SELECT * FROM drinks ORDER BY name');
@@ -128,7 +129,8 @@ app.get('/api/available-drinks', async (req, res) => {
     for (let drink of drinks) {
       const ingredients = await query(`
         SELECT di.ingredient_type, di.ingredient_id, di.quantity,
-               CASE WHEN di.ingredient_type = 'wet' THEN wi.is_active ELSE di2.is_active END as is_active
+               CASE WHEN di.ingredient_type = 'wet' THEN wi.is_active ELSE di2.is_active END as is_active,
+               CASE WHEN di.ingredient_type = 'wet' THEN wi.unit ELSE di2.unit END as unit
         FROM drink_ingredients di
         LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
         LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
@@ -138,7 +140,8 @@ app.get('/api/available-drinks', async (req, res) => {
       if (allActive && ingredients.length > 0) {
         const fullIngredients = await query(`
           SELECT di.ingredient_type, di.quantity,
-                 CASE WHEN di.ingredient_type = 'wet' THEN wi.name ELSE di2.name END as name
+                 CASE WHEN di.ingredient_type = 'wet' THEN wi.name ELSE di2.name END as name,
+                 CASE WHEN di.ingredient_type = 'wet' THEN wi.unit ELSE di2.unit END as unit
           FROM drink_ingredients di
           LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
           LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id

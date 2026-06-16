@@ -21,7 +21,9 @@ async function run(sql, params = []) {
   const client = await pool.connect();
   try {
     const res = await client.query(sql, params);
-    return { lastID: res.rows[0]?.id, changes: res.rowCount };
+    // If INSERT with RETURNING id, res.rows[0].id is available
+    const lastID = res.rows && res.rows[0] ? res.rows[0].id : null;
+    return { lastID, changes: res.rowCount };
   } finally {
     client.release();
   }

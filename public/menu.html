@@ -59,12 +59,12 @@
 
     emptyState.style.display = 'none';
     container.innerHTML = drinks.map((d, index) => {
-      // Build ingredient list with quantity & oz
+      // Build ingredient list with quantity + unit
       const ingredientsHtml = d.ingredients && d.ingredients.length > 0
         ? d.ingredients.map(i => {
             const qty = i.quantity ? parseFloat(i.quantity) : '';
-            const qtyDisplay = qty ? `${qty} oz` : '';
-            return `${i.name}${qtyDisplay ? ` (${qtyDisplay})` : ''}`;
+            const qtyDisplay = qty ? `${qty} ${i.unit || ''}` : i.name;
+            return qtyDisplay;
           }).join(' • ')
         : '';
 

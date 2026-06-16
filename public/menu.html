@@ -10,6 +10,13 @@
 <div class="container">
   <h1>🍸 Mocktail Menu</h1>
   <p style="color: #8B8680; margin-bottom: 2rem; font-size: 1.05rem;">Discover our selection of refreshing mocktails</p>
+
+  <!-- Name input -->
+  <div style="background: var(--color-surface-bright); padding: 1rem; border-radius: 12px; margin-bottom: 2rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+    <label style="color: var(--color-text-dim); font-weight: 500;">Your Name:</label>
+    <input type="text" id="customer-name" placeholder="Enter your name" style="flex: 1; min-width: 150px; padding: 0.5rem 1rem; background: var(--color-surface); border: 1px solid rgba(0, 217, 255, 0.2); border-radius: 12px; color: var(--color-text);">
+  </div>
+
   <div id="menu-list"></div>
   <div id="empty-state" style="text-align: center; padding: 3rem 1rem; display: none;">
     <p style="font-size: 1.1rem; color: #8B8680;">No drinks available right now</p>
@@ -20,6 +27,8 @@
 <div id="toast" class="toast">✓ Order Placed</div>
 
 <script>
+  let lastMenuData = '';
+
   async function fetchJSON(url, options = {}) {
     try {
       const res = await fetch(url, options);
@@ -54,12 +63,13 @@
     if (!drinks || drinks.length === 0) {
       container.innerHTML = '';
       emptyState.style.display = 'block';
+      lastMenuData = '';
       return;
     }
-
     emptyState.style.display = 'none';
-    container.innerHTML = drinks.map((d, index) => {
-      // Build ingredient list with quantity + unit
+
+    // Build HTML
+    const html = drinks.map((d, index) => {
       const ingredientsHtml = d.ingredients && d.ingredients.length > 0
         ? d.ingredients.map(i => {
             const qty = i.quantity ? parseFloat(i.quantity) : '';
@@ -79,22 +89,30 @@
         </div>
       `;
     }).join('');
-  }
 
-  async function orderDrink(drinkId) {
-    const result = await fetchJSON('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drink_id: drinkId })
-    });
-
-    if (result) {
-      showToast('✓ Order Placed');
+    // Only update if changed
+    if (html !== lastMenuData) {
+      container.innerHTML = html;
+      lastMenuData = html;
     }
   }
 
-  // Poll for menu changes every 5 seconds
-  setInterval(loadMenu, 5000);
+  async function orderDrink(drinkId) {
+    const customerName = document.getElementById('customer-name').value.trim() || 'Anonymous';
+
+    const result = await fetchJSON('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drink_id: drinkId, customer_name: customerName })
+    });
+
+    if (result) {
+      showToast(`✓ Order placed for ${customerName}`);
+    }
+  }
+
+  // Poll less aggressively – 3 seconds
+  setInterval(loadMenu, 3000);
   loadMenu();
 </script>
 </body>

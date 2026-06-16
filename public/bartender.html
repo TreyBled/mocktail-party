@@ -6,7 +6,7 @@
   <title>Bartender – Mocktail Party</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* Modal styles */
+    /* Existing styles plus modal for order details */
     .modal-overlay {
       display: none;
       position: fixed;
@@ -147,7 +147,6 @@
       min-width: 30px;
     }
 
-    /* Search bar style */
     .search-input {
       width: 100%;
       padding: 0.5rem 1rem;
@@ -168,6 +167,34 @@
     .search-input::placeholder {
       color: var(--color-text-dim);
       opacity: 0.7;
+    }
+
+    /* Order items clickable */
+    .order-item {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .order-item:hover {
+      background: rgba(0, 217, 255, 0.15);
+      transform: translateX(4px);
+    }
+
+    .drink-list-item {
+      background: var(--color-surface-bright);
+      padding: 0.8rem 1rem;
+      border-radius: 12px;
+      margin-bottom: 0.5rem;
+      border-left: 3px solid var(--color-neon-cyan);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .drink-list-item .drink-name {
+      font-weight: 500;
+    }
+    .drink-list-item .drink-ingredients {
+      color: var(--color-text-dim);
+      font-size: 0.9rem;
     }
   </style>
 </head>
@@ -223,6 +250,13 @@
           <button type="submit" class="primary" style="margin-top: 0.5rem;">Create Recipe</button>
         </form>
       </div>
+
+      <!-- NEW: Available Drinks List -->
+      <div class="card">
+        <h2>📋 All Available Drinks</h2>
+        <input type="text" id="drink-search" class="search-input" placeholder="🔍 Search drinks...">
+        <div id="available-drinks-list" style="max-height: 400px; overflow-y: auto;"></div>
+      </div>
     </div>
 
     <!-- Right column: Orders -->
@@ -277,9 +311,28 @@
   </div>
 </div>
 
+<!-- ========== ORDER DETAIL MODAL ========== -->
+<div class="modal-overlay" id="orderDetailModal" onclick="if(event.target===this) closeOrderDetail();">
+  <div class="modal">
+    <h2 id="order-detail-name">Drink Name</h2>
+    <p><strong>Customer:</strong> <span id="order-detail-customer"></span></p>
+    <p><strong>Description:</strong></p>
+    <p id="order-detail-description" style="color: var(--color-text-dim);"></p>
+    <p><strong>Instructions:</strong></p>
+    <p id="order-detail-instructions" style="color: var(--color-text-dim);"></p>
+    <div class="modal-actions">
+      <button onclick="closeOrderDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast">Saved</div>
 
 <script>
+  // ---------- Caching for orders and drinks ----------
+  let lastOrdersData = '';
+  let lastAvailableDrinksData = '';
+
   // Store current edit state
   let currentEdit = { id: null, type: null };
 
@@ -309,7 +362,7 @@
     setTimeout(() => toast.classList.remove('show'), 2500);
   }
 
-  // ---------- Modal functions ----------
+  // ---------- Modal functions (edit) ----------
   function openEditModal(id, type, name, unit) {
     currentEdit = { id, type };
     document.getElementById('edit-name').value = name;
@@ -348,6 +401,19 @@
     }
   }
 
+  // ---------- Order Detail Modal ----------
+  function openOrderDetail(order) {
+    document.getElementById('order-detail-name').textContent = order.drink_name;
+    document.getElementById('order-detail-customer').textContent = order.customer_name || 'Anonymous';
+    document.getElementById('order-detail-description').textContent = order.description || 'No description.';
+    document.getElementById('order-detail-instructions').textContent = order.instructions || 'No instructions.';
+    document.getElementById('orderDetailModal').classList.add('active');
+  }
+
+  function closeOrderDetail() {
+    document.getElementById('orderDetailModal').classList.remove('active');
+  }
+
   // ---------- Filter functions ----------
   function filterList(containerId, searchId, itemSelector, textSelector) {
     const search = document.getElementById(searchId);
@@ -368,29 +434,20 @@
     });
   }
 
-  // Attach filter events after DOM is ready
   document.addEventListener('DOMContentLoaded', function() {
     // Wet search
-    const wetSearch = document.getElementById('wet-search');
-    if (wetSearch) {
-      wetSearch.addEventListener('input', function() {
-        filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
-      });
-    }
-    // Dry search
-    const drySearch = document.getElementById('dry-search');
-    if (drySearch) {
-      drySearch.addEventListener('input', function() {
-        filterList('dry-list', 'dry-search', '.ingredient-item', 'span strong');
-      });
-    }
-    // Ingredient search in create drink
-    const ingSearch = document.getElementById('ingredient-search');
-    if (ingSearch) {
-      ingSearch.addEventListener('input', function() {
-        filterList('ingredient-checkboxes', 'ingredient-search', '.ing-check-wrapper', 'span');
-      });
-    }
+    document.getElementById('wet-search').addEventListener('input', function() {
+      filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
+    });
+    document.getElementById('dry-search').addEventListener('input', function() {
+      filterList('dry-list', 'dry-search', '.ingredient-item', 'span strong');
+    });
+    document.getElementById('ingredient-search').addEventListener('input', function() {
+      filterList('ingredient-checkboxes', 'ingredient-search', '.ing-check-wrapper', 'span');
+    });
+    document.getElementById('drink-search').addEventListener('input', function() {
+      filterList('available-drinks-list', 'drink-search', '.drink-list-item', '.drink-name');
+    });
   });
 
   // ---------- Load ingredients ----------
@@ -418,7 +475,6 @@
             </div>
           </div>
         `).join('');
-        // Re-apply filter
         filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
       }
     }
@@ -444,12 +500,11 @@
             </div>
           </div>
         `).join('');
-        // Re-apply filter
         filterList('dry-list', 'dry-search', '.ingredient-item', 'span strong');
       }
     }
 
-    // Populate ingredient checkboxes with amount input
+    // Populate ingredient checkboxes
     if (wet && dry) {
       const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
       const checkDiv = document.getElementById('ingredient-checkboxes');
@@ -466,15 +521,16 @@
             <span class="unit-hint">${ing.unit || ''}</span>
           </div>
         `).join('');
-        // Re-apply filter
         filterList('ingredient-checkboxes', 'ingredient-search', '.ing-check-wrapper', 'span');
       }
     }
 
+    // Also load available drinks list
+    loadAvailableDrinks();
+
     updateStats();
   }
 
-  // Enable/disable quantity input based on checkbox
   function toggleQuantityInput(checkbox) {
     const wrapper = checkbox.closest('.ing-check-wrapper');
     const qtyInput = wrapper.querySelector('.ing-quantity');
@@ -503,27 +559,39 @@
     }
   };
 
-  // ---------- Load pending orders ----------
+  // ---------- Load pending orders (with cache) ----------
   async function loadOrders() {
     const orders = await fetchJSON('/api/orders/pending');
     const container = document.getElementById('orders-list');
-    
+
     if (!orders || orders.length === 0) {
-      container.innerHTML = '<p style="text-align: center; color: #8B8680;">No orders yet</p>';
+      const emptyHtml = '<p style="text-align: center; color: #8B8680;">No orders yet</p>';
+      if (container.innerHTML !== emptyHtml) {
+        container.innerHTML = emptyHtml;
+      }
+      lastOrdersData = '';
       updateStats();
       return;
     }
 
-    container.innerHTML = orders.map((o, index) => `
-      <div class="order-item" style="animation-delay: ${index * 0.05}s">
+    const html = orders.map((o, index) => `
+      <div class="order-item" style="animation-delay: ${index * 0.05}s" onclick="openOrderDetail(${JSON.stringify(o).replace(/"/g, '&quot;')})">
         <div style="flex: 1;">
           <div style="color: var(--color-neon-cyan); font-weight: 600; margin-bottom: 0.3rem;">${o.drink_name}</div>
-          <small style="color: var(--color-text-dim); font-size: 0.8rem;">${new Date(o.created_at).toLocaleTimeString()}</small>
+          <div style="display: flex; gap: 1rem; font-size: 0.85rem; color: var(--color-text-dim);">
+            <span>👤 ${o.customer_name || 'Anonymous'}</span>
+            <span>🕐 ${new Date(o.created_at).toLocaleTimeString()}</span>
+          </div>
         </div>
-        <button type="button" class="primary" onclick="completeOrder(${o.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem; margin: 0;">✓ Done</button>
+        <button type="button" class="primary" onclick="event.stopPropagation(); completeOrder(${o.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem; margin: 0;">✓ Done</button>
       </div>
     `).join('');
 
+    // Only update if changed
+    if (html !== lastOrdersData) {
+      container.innerHTML = html;
+      lastOrdersData = html;
+    }
     updateStats();
   }
 
@@ -534,6 +602,44 @@
       loadOrders();
     }
   };
+
+  // ---------- Load available drinks for bartender ----------
+  async function loadAvailableDrinks() {
+    const drinks = await fetchJSON('/api/available-drinks?_=' + Date.now());
+    const container = document.getElementById('available-drinks-list');
+    if (!drinks || drinks.length === 0) {
+      const emptyHtml = '<p style="text-align: center; color: #8B8680;">No drinks available</p>';
+      if (container.innerHTML !== emptyHtml) {
+        container.innerHTML = emptyHtml;
+      }
+      lastAvailableDrinksData = '';
+      return;
+    }
+
+    const html = drinks.map(d => {
+      const ingredientsText = d.ingredients && d.ingredients.length > 0
+        ? d.ingredients.map(i => {
+            const qty = i.quantity ? parseFloat(i.quantity) : '';
+            return `${i.name}${qty ? ` (${qty} ${i.unit || ''})` : ''}`;
+          }).join(', ')
+        : 'No ingredients';
+      return `
+        <div class="drink-list-item">
+          <div>
+            <div class="drink-name">${d.name}</div>
+            <div class="drink-ingredients">${ingredientsText}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (html !== lastAvailableDrinksData) {
+      container.innerHTML = html;
+      lastAvailableDrinksData = html;
+      // Re-apply drink search filter
+      filterList('available-drinks-list', 'drink-search', '.drink-list-item', '.drink-name');
+    }
+  }
 
   // ---------- Add ingredient forms ----------
   document.getElementById('add-wet-form').addEventListener('submit', async (e) => {
@@ -623,6 +729,7 @@
         qtyInput.value = '';
       });
       showToast('Recipe created!');
+      loadIngredients(); // refresh available drinks list
       updateStats();
     } else {
       showToast('Failed to create recipe.', true);
@@ -642,6 +749,7 @@
 
   // ---------- Polling ----------
   setInterval(loadOrders, 2000);
+  setInterval(loadAvailableDrinks, 5000);
 
   // Initial load
   loadIngredients();

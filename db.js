@@ -2,10 +2,9 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Required for Render
+  ssl: { rejectUnauthorized: false }
 });
 
-// Helper: run SELECT queries, returns rows
 async function query(sql, params = []) {
   const client = await pool.connect();
   try {
@@ -16,20 +15,16 @@ async function query(sql, params = []) {
   }
 }
 
-// Helper: run INSERT/UPDATE/DELETE, returns { lastID, changes }
 async function run(sql, params = []) {
   const client = await pool.connect();
   try {
     const res = await client.query(sql, params);
-    // If INSERT with RETURNING id, res.rows[0].id is available
-    const lastID = res.rows && res.rows[0] ? res.rows[0].id : null;
-    return { lastID, changes: res.rowCount };
+    return { lastID: res.rows[0]?.id, changes: res.rowCount };
   } finally {
     client.release();
   }
 }
 
-// Initialize tables
 async function initTables() {
   await query(`
     CREATE TABLE IF NOT EXISTS wet_ingredients (
@@ -69,10 +64,20 @@ async function initTables() {
     CREATE TABLE IF NOT EXISTS orders (
       id SERIAL PRIMARY KEY,
       drink_id INTEGER NOT NULL,
+      customer_name TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending','completed')),
       FOREIGN KEY(drink_id) REFERENCES drinks(id)
     )
+  `);
+  // Add customer_name if missing (for existing databases)
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customer_name') THEN
+        ALTER TABLE orders ADD COLUMN customer_name TEXT;
+      END IF;
+    END $$;
   `);
 }
 

@@ -6,17 +6,14 @@ const { query, run, initTables } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Initialize tables
 initTables().catch(err => console.error('DB init error:', err));
 
 // ---------- INGREDIENT ENDPOINTS ----------
 
-// Get all wet ingredients
 app.get('/api/ingredients/wet', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM wet_ingredients ORDER BY name');
@@ -26,7 +23,6 @@ app.get('/api/ingredients/wet', async (req, res) => {
   }
 });
 
-// Get all dry ingredients
 app.get('/api/ingredients/dry', async (req, res) => {
   try {
     const rows = await query('SELECT * FROM dry_ingredients ORDER BY name');
@@ -36,7 +32,6 @@ app.get('/api/ingredients/dry', async (req, res) => {
   }
 });
 
-// Toggle ingredient active status
 app.put('/api/ingredients/:type/:id/toggle', async (req, res) => {
   const { type, id } = req.params;
   const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
@@ -51,7 +46,6 @@ app.put('/api/ingredients/:type/:id/toggle', async (req, res) => {
   }
 });
 
-// Add new ingredient (with RETURNING id)
 app.post('/api/ingredients/:type', async (req, res) => {
   const { type } = req.params;
   const { name, unit } = req.body;
@@ -68,7 +62,6 @@ app.post('/api/ingredients/:type', async (req, res) => {
   }
 });
 
-// Update ingredient (name & unit)
 app.put('/api/ingredients/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   const { name, unit } = req.body;
@@ -83,7 +76,6 @@ app.put('/api/ingredients/:type/:id', async (req, res) => {
   }
 });
 
-// Delete ingredient (and remove from drink recipes)
 app.delete('/api/ingredients/:type/:id', async (req, res) => {
   const { type, id } = req.params;
   const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
@@ -99,7 +91,6 @@ app.delete('/api/ingredients/:type/:id', async (req, res) => {
 
 // ---------- DRINK ENDPOINTS ----------
 
-// Get all drinks with their ingredients (including unit)
 app.get('/api/drinks', async (req, res) => {
   try {
     const drinks = await query('SELECT * FROM drinks ORDER BY name');
@@ -121,7 +112,6 @@ app.get('/api/drinks', async (req, res) => {
   }
 });
 
-// Get only available drinks (all ingredients active) – includes unit
 app.get('/api/available-drinks', async (req, res) => {
   try {
     const drinks = await query('SELECT * FROM drinks ORDER BY name');
@@ -157,7 +147,6 @@ app.get('/api/available-drinks', async (req, res) => {
   }
 });
 
-// Add a new drink (with RETURNING id)
 app.post('/api/drinks', async (req, res) => {
   const { name, description, instructions, ingredients } = req.body;
   if (!name || !ingredients || !Array.isArray(ingredients)) {
@@ -185,14 +174,13 @@ app.post('/api/drinks', async (req, res) => {
 
 // ---------- ORDER ENDPOINTS ----------
 
-// Create an order (with RETURNING id)
 app.post('/api/orders', async (req, res) => {
-  const { drink_id } = req.body;
+  const { drink_id, customer_name } = req.body;
   if (!drink_id) return res.status(400).json({ error: 'drink_id required' });
   try {
     const result = await run(
-      'INSERT INTO orders (drink_id) VALUES ($1) RETURNING id',
-      [drink_id]
+      'INSERT INTO orders (drink_id, customer_name) VALUES ($1, $2) RETURNING id',
+      [drink_id, customer_name || 'Anonymous']
     );
     res.status(201).json({ id: result.lastID, drink_id });
   } catch (err) {
@@ -200,11 +188,11 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-// Get all pending orders
 app.get('/api/orders/pending', async (req, res) => {
   try {
     const rows = await query(`
-      SELECT o.id, o.drink_id, o.created_at, d.name as drink_name
+      SELECT o.id, o.drink_id, o.customer_name, o.created_at,
+             d.name as drink_name, d.description, d.instructions
       FROM orders o
       JOIN drinks d ON o.drink_id = d.id
       WHERE o.status = 'pending'
@@ -216,7 +204,6 @@ app.get('/api/orders/pending', async (req, res) => {
   }
 });
 
-// Mark order as completed
 app.put('/api/orders/:id/complete', async (req, res) => {
   const { id } = req.params;
   try {
@@ -236,12 +223,10 @@ app.get('/menu', (req, res) => {
 });
 app.get('/', (req, res) => res.redirect('/bartender'));
 
-// Catch-all 404
 app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// ---------- START ----------
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Bartender: http://localhost:${PORT}/bartender`);

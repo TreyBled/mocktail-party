@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { query, run } = require('./db');
+const { query, run, initTables } = require('./db');  // changed import
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,7 +9,10 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // serve static files (HTML, CSS, JS)
+app.use(express.static('public'));
+
+// Initialize database tables
+initTables().catch(err => console.error('DB init error:', err));
 
 // ---------- INGREDIENT ENDPOINTS ----------
 // Get all wet ingredients
@@ -38,10 +41,10 @@ app.put('/api/ingredients/:type/:id/toggle', async (req, res) => {
   const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
   try {
     // Get current status
-    const rows = await query(`SELECT is_active FROM ${table} WHERE id = ?`, [id]);
+    const rows = await query(`SELECT is_active FROM ${table} WHERE id = $1`, [id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Ingredient not found' });
     const newStatus = rows[0].is_active ? 0 : 1;
-    await run(`UPDATE ${table} SET is_active = ? WHERE id = ?`, [newStatus, id]);
+    await run(`UPDATE ${table} SET is_active = $1 WHERE id = $2`, [newStatus, id]);
     res.json({ success: true, is_active: newStatus });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -55,7 +58,7 @@ app.post('/api/ingredients/:type', async (req, res) => {
   const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
   if (!name) return res.status(400).json({ error: 'Name required' });
   try {
-    const result = await run(`INSERT INTO ${table} (name, unit, is_active) VALUES (?, ?, 1)`, [name, unit || '']);
+    const result = await run(`INSERT INTO ${table} (name, unit, is_active) VALUES ($1, $2, 1)`, [name, unit || '']);
     res.status(201).json({ id: result.lastID, name, unit });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -74,7 +77,7 @@ app.get('/api/drinks', async (req, res) => {
         FROM drink_ingredients di
         LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
         LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
-        WHERE di.drink_id = ?
+        WHERE di.drink_id = $1
       `, [drink.id]);
       drink.ingredients = ingredients;
     }
@@ -96,7 +99,7 @@ app.get('/api/available-drinks', async (req, res) => {
         FROM drink_ingredients di
         LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
         LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
-        WHERE di.drink_id = ?
+        WHERE di.drink_id = $1
       `, [drink.id]);
       // If any ingredient is inactive or missing, drink is not available
       const allActive = ingredients.every(ing => ing.is_active === 1);
@@ -108,7 +111,7 @@ app.get('/api/available-drinks', async (req, res) => {
           FROM drink_ingredients di
           LEFT JOIN wet_ingredients wi ON di.ingredient_type = 'wet' AND di.ingredient_id = wi.id
           LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
-          WHERE di.drink_id = ?
+          WHERE di.drink_id = $1
         `, [drink.id]);
         drink.ingredients = fullIngredients;
         available.push(drink);
@@ -129,7 +132,7 @@ app.post('/api/drinks', async (req, res) => {
   try {
     // Insert drink
     const result = await run(
-      'INSERT INTO drinks (name, description, instructions) VALUES (?, ?, ?)',
+      'INSERT INTO drinks (name, description, instructions) VALUES ($1, $2, $3)',
       [name, description || '', instructions || '']
     );
     const drinkId = result.lastID;
@@ -138,7 +141,7 @@ app.post('/api/drinks', async (req, res) => {
       const { type, id, quantity } = ing;
       if (!type || !id) continue;
       await run(
-        'INSERT INTO drink_ingredients (drink_id, ingredient_type, ingredient_id, quantity) VALUES (?, ?, ?, ?)',
+        'INSERT INTO drink_ingredients (drink_id, ingredient_type, ingredient_id, quantity) VALUES ($1, $2, $3, $4)',
         [drinkId, type, id, quantity || '']
       );
     }
@@ -154,7 +157,7 @@ app.post('/api/orders', async (req, res) => {
   const { drink_id } = req.body;
   if (!drink_id) return res.status(400).json({ error: 'drink_id required' });
   try {
-    const result = await run('INSERT INTO orders (drink_id) VALUES (?)', [drink_id]);
+    const result = await run('INSERT INTO orders (drink_id) VALUES ($1)', [drink_id]);
     res.status(201).json({ id: result.lastID, drink_id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -181,7 +184,7 @@ app.get('/api/orders/pending', async (req, res) => {
 app.put('/api/orders/:id/complete', async (req, res) => {
   const { id } = req.params;
   try {
-    await run('UPDATE orders SET status = "completed" WHERE id = ?', [id]);
+    await run('UPDATE orders SET status = $1 WHERE id = $2', ['completed', id]);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

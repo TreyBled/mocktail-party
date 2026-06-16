@@ -1,41 +1,61 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 
-const dbPath = path.join(__dirname, 'mocktail.db');
-const db = new sqlite3.Database(dbPath);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false } // Required for Render
+});
+
+// Helper: run SELECT queries, returns rows
+async function query(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return res.rows;
+  } finally {
+    client.release();
+  }
+}
+
+// Helper: run INSERT/UPDATE/DELETE, returns { lastID, changes }
+async function run(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return { lastID: res.rows[0]?.id, changes: res.rowCount };
+  } finally {
+    client.release();
+  }
+}
 
 // Initialize tables
-db.serialize(() => {
-  db.run(`
+async function initTables() {
+  await query(`
     CREATE TABLE IF NOT EXISTS wet_ingredients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       unit TEXT,
       is_active INTEGER DEFAULT 1
     )
   `);
-
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS dry_ingredients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       unit TEXT,
       is_active INTEGER DEFAULT 1
     )
   `);
-
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS drinks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL UNIQUE,
       description TEXT,
       instructions TEXT
     )
   `);
-
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS drink_ingredients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       drink_id INTEGER NOT NULL,
       ingredient_type TEXT NOT NULL CHECK(ingredient_type IN ('wet','dry')),
       ingredient_id INTEGER NOT NULL,
@@ -43,36 +63,15 @@ db.serialize(() => {
       FOREIGN KEY(drink_id) REFERENCES drinks(id) ON DELETE CASCADE
     )
   `);
-
-  db.run(`
+  await query(`
     CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       drink_id INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       status TEXT DEFAULT 'pending' CHECK(status IN ('pending','completed')),
       FOREIGN KEY(drink_id) REFERENCES drinks(id)
     )
   `);
-});
-
-// Helper: run a query and return rows
-function query(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
 }
 
-// Helper: run a statement (INSERT/UPDATE/DELETE) and return lastID or changes
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) reject(err);
-      else resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
-}
-
-module.exports = { db, query, run };
+module.exports = { query, run, initTables };

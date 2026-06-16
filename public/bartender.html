@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bartender – Mocktail Party</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h1>🍹 Bartender Panel</h1>
+  
+  <div class="flex-row">
+    <!-- Left column: Ingredients -->
+    <div class="flex-col">
+      <div class="card">
+        <h2>Wet Ingredients</h2>
+        <div id="wet-list"></div>
+        <hr>
+        <form id="add-wet-form">
+          <input type="text" id="wet-name" placeholder="Name" required>
+          <input type="text" id="wet-unit" placeholder="Unit (e.g. ml)">
+          <button type="submit" class="primary">Add Wet</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Dry Ingredients</h2>
+        <div id="dry-list"></div>
+        <hr>
+        <form id="add-dry-form">
+          <input type="text" id="dry-name" placeholder="Name" required>
+          <input type="text" id="dry-unit" placeholder="Unit (e.g. g)">
+          <button type="submit" class="primary">Add Dry</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Add New Drink</h2>
+        <form id="add-drink-form">
+          <input type="text" id="drink-name" placeholder="Drink name" required><br><br>
+          <textarea id="drink-desc" placeholder="Description" rows="2"></textarea><br>
+          <textarea id="drink-instr" placeholder="Instructions" rows="2"></textarea><br>
+          <div id="ingredient-selector">
+            <p><strong>Ingredients</strong> (select from available)</p>
+            <div id="ingredient-checkboxes"></div>
+          </div>
+          <button type="submit" class="primary">Add Drink</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Right column: Orders -->
+    <div class="flex-col">
+      <div class="card">
+        <h2>📋 Pending Orders</h2>
+        <div id="orders-list" class="orders-sidebar">
+          <p>No orders yet.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // ---------- Helper functions ----------
+  async function fetchJSON(url, options = {}) {
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  // ---------- Load ingredients and render checkboxes ----------
+  async function loadIngredients() {
+    // Wet
+    const wet = await fetchJSON('/api/ingredients/wet');
+    const wetContainer = document.getElementById('wet-list');
+    wetContainer.innerHTML = wet.map(i => `
+      <div class="ingredient-item">
+        <label>
+          <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="wet">
+          ${i.name} ${i.unit ? '('+i.unit+')' : ''}
+        </label>
+        <button onclick="toggleIngredient('wet', ${i.id})">Toggle</button>
+      </div>
+    `).join('');
+
+    // Dry
+    const dry = await fetchJSON('/api/ingredients/dry');
+    const dryContainer = document.getElementById('dry-list');
+    dryContainer.innerHTML = dry.map(i => `
+      <div class="ingredient-item">
+        <label>
+          <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="dry">
+          ${i.name} ${i.unit ? '('+i.unit+')' : ''}
+        </label>
+        <button onclick="toggleIngredient('dry', ${i.id})">Toggle</button>
+      </div>
+    `).join('');
+
+    // Also populate ingredient checkboxes for "Add Drink"
+    const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
+    const checkDiv = document.getElementById('ingredient-checkboxes');
+    checkDiv.innerHTML = allIngredients.map(ing => `
+      <div>
+        <label>
+          <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}">
+          ${ing.name} (${ing.type})
+        </label>
+      </div>
+    `).join('');
+  }
+
+  // ---------- Toggle ingredient ----------
+  window.toggleIngredient = async function(type, id) {
+    await fetchJSON(`/api/ingredients/${type}/${id}/toggle`, { method: 'PUT' });
+    loadIngredients(); // refresh
+    loadOrders(); // in case availability affects orders? not directly, but keep
+  };
+
+  // ---------- Load pending orders ----------
+  async function loadOrders() {
+    const orders = await fetchJSON('/api/orders/pending');
+    const container = document.getElementById('orders-list');
+    if (orders.length === 0) {
+      container.innerHTML = '<p>No orders yet.</p>';
+      return;
+    }
+    container.innerHTML = orders.map(o => `
+      <div class="order-item">
+        <span><strong>${o.drink_name}</strong> <small>${new Date(o.created_at).toLocaleTimeString()}</small></span>
+        <button class="primary" onclick="completeOrder(${o.id})">✔ Done</button>
+      </div>
+    `).join('');
+  }
+
+  // ---------- Complete order ----------
+  window.completeOrder = async function(id) {
+    await fetchJSON(`/api/orders/${id}/complete`, { method: 'PUT' });
+    loadOrders();
+  };
+
+  // ---------- Add ingredient forms ----------
+  document.getElementById('add-wet-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('wet-name').value.trim();
+    const unit = document.getElementById('wet-unit').value.trim();
+    if (!name) return;
+    await fetchJSON('/api/ingredients/wet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, unit })
+    });
+    document.getElementById('wet-name').value = '';
+    document.getElementById('wet-unit').value = '';
+    loadIngredients();
+  });
+
+  document.getElementById('add-dry-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('dry-name').value.trim();
+    const unit = document.getElementById('dry-unit').value.trim();
+    if (!name) return;
+    await fetchJSON('/api/ingredients/dry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, unit })
+    });
+    document.getElementById('dry-name').value = '';
+    document.getElementById('dry-unit').value = '';
+    loadIngredients();
+  });
+
+  // ---------- Add drink form ----------
+  document.getElementById('add-drink-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('drink-name').value.trim();
+    const description = document.getElementById('drink-desc').value.trim();
+    const instructions = document.getElementById('drink-instr').value.trim();
+    if (!name) return;
+
+    // Gather selected ingredients
+    const checkboxes = document.querySelectorAll('.ing-check:checked');
+    const ingredients = Array.from(checkboxes).map(cb => ({
+      type: cb.dataset.type,
+      id: parseInt(cb.dataset.id),
+      quantity: '' // you could add a quantity input later
+    }));
+
+    if (ingredients.length === 0) {
+      alert('Please select at least one ingredient.');
+      return;
+    }
+
+    await fetchJSON('/api/drinks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description, instructions, ingredients })
+    });
+
+    document.getElementById('drink-name').value = '';
+    document.getElementById('drink-desc').value = '';
+    document.getElementById('drink-instr').value = '';
+    checkboxes.forEach(cb => cb.checked = false);
+    alert('Drink added!');
+  });
+
+  // ---------- Polling for orders (every 2 seconds) ----------
+  function pollOrders() {
+    loadOrders();
+  }
+  setInterval(pollOrders, 2000);
+
+  // Initial load
+  loadIngredients();
+  loadOrders();
+</script>
+</body>
+</html>

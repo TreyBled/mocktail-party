@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menu – Mocktail Party</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h1>🍸 Available Mocktails</h1>
+  <p>These are the drinks you can make right now.</p>
+  <div id="menu-list"></div>
+</div>
+<div id="toast" class="toast">Order placed!</div>
+
+<script>
+  async function fetchJSON(url, options = {}) {
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  async function loadMenu() {
+    const drinks = await fetchJSON('/api/available-drinks');
+    const container = document.getElementById('menu-list');
+    if (drinks.length === 0) {
+      container.innerHTML = '<p>No drinks available right now. Add some ingredients!</p>';
+      return;
+    }
+    container.innerHTML = drinks.map(d => `
+      <div class="drink-card">
+        <div class="drink-info">
+          <h3>${d.name}</h3>
+          <p>${d.description || ''}</p>
+          <small><em>${d.ingredients.map(i => i.name).join(', ')}</em></small>
+        </div>
+        <button class="primary" onclick="orderDrink(${d.id})">Order</button>
+      </div>
+    `).join('');
+  }
+
+  async function orderDrink(drinkId) {
+    await fetchJSON('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drink_id: drinkId })
+    });
+    // Show toast
+    const toast = document.getElementById('toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+
+  // Poll for menu changes every 5 seconds (in case ingredients change)
+  setInterval(loadMenu, 5000);
+  loadMenu();
+</script>
+</body>
+</html>

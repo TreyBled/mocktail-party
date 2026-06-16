@@ -79,7 +79,7 @@
       to { transform: translateY(0); opacity: 1; }
     }
 
-    /* Ingredient list adjustments – remove inline editing */
+    /* Ingredient list adjustments */
     .ingredient-item .ingredient-actions {
       display: flex;
       gap: 0.5rem;
@@ -192,17 +192,17 @@
 </div>
 
 <!-- ========== EDIT MODAL ========== -->
-<div class="modal-overlay" id="editModal">
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this) closeModal();">
   <div class="modal">
     <h2>✏️ Edit Ingredient</h2>
-    <form id="edit-form" onsubmit="event.preventDefault(); saveEdit();">
+    <form id="edit-form">
       <label for="edit-name">Name</label>
       <input type="text" id="edit-name" required>
       <label for="edit-unit">Unit (optional)</label>
       <input type="text" id="edit-unit" placeholder="e.g., ml, g, oz">
       <div class="modal-actions">
         <button type="button" onclick="closeModal()">Cancel</button>
-        <button type="submit" class="primary">💾 Save Changes</button>
+        <button type="button" class="primary" onclick="saveEdit()">💾 Save Changes</button>
       </div>
     </form>
   </div>
@@ -218,7 +218,7 @@
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Fetch error:', error);
       return null;
     }
   }
@@ -227,7 +227,7 @@
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
+    setTimeout(() => toast.classList.remove('show'), 2500);
   }
 
   // ---------- Modal Control ----------
@@ -235,6 +235,7 @@
   let currentEditType = null;
 
   function openEditModal(id, type, name, unit) {
+    console.log('Opening edit for:', id, type, name, unit);
     currentEditId = id;
     currentEditType = type;
     document.getElementById('edit-name').value = name;
@@ -257,16 +258,21 @@
       return;
     }
 
+    console.log('Saving edit:', currentEditType, currentEditId, name, unit);
+
     const result = await fetchJSON(`/api/ingredients/${currentEditType}/${currentEditId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
     });
 
-    if (result) {
+    if (result && result.success) {
       showToast('Ingredient updated');
       closeModal();
       loadIngredients(); // refresh lists
+    } else {
+      showToast('Update failed. Check console.', true);
+      console.error('Update error:', result);
     }
   }
 
@@ -352,9 +358,11 @@
   window.deleteIngredient = async function(type, id) {
     if (!confirm('Delete this ingredient? It will be removed from all drink recipes.')) return;
     const result = await fetchJSON(`/api/ingredients/${type}/${id}`, { method: 'DELETE' });
-    if (result) {
+    if (result && result.success) {
       showToast('Ingredient deleted');
       loadIngredients();
+    } else {
+      showToast('Delete failed.', true);
     }
   };
 
@@ -451,13 +459,15 @@
       body: JSON.stringify({ name, description, instructions, ingredients })
     });
 
-    if (result) {
+    if (result && result.id) {
       document.getElementById('drink-name').value = '';
       document.getElementById('drink-desc').value = '';
       document.getElementById('drink-instr').value = '';
       document.querySelectorAll('.ing-check:checked').forEach(cb => cb.checked = false);
       showToast('Recipe created!');
       updateStats();
+    } else {
+      showToast('Failed to create recipe.', true);
     }
   });
 

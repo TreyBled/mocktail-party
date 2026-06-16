@@ -8,51 +8,81 @@
 </head>
 <body>
 <div class="container">
-  <h1>🍸 Available Mocktails</h1>
-  <p>These are the drinks you can make right now.</p>
+  <h1>🍸 Mocktail Menu</h1>
+  <p style="color: #8B8680; margin-bottom: 2rem; font-size: 1.05rem;">Discover our selection of refreshing mocktails</p>
   <div id="menu-list"></div>
+  <div id="empty-state" style="text-align: center; padding: 3rem 1rem; display: none;">
+    <p style="font-size: 1.1rem; color: #8B8680;">No drinks available right now</p>
+    <small style="color: #5a4e42;">Check back soon while we stock up on ingredients!</small>
+  </div>
 </div>
-<div id="toast" class="toast">Order placed!</div>
+
+<div id="toast" class="toast">✓ Order Placed</div>
 
 <script>
   async function fetchJSON(url, options = {}) {
-    const res = await fetch(url, options);
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (error) {
+      console.error('Error:', error);
+      showToast('Connection error. Please try again.', true);
+      return null;
+    }
+  }
+
+  function showToast(message = '✓ Order Placed', isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    if (isError) {
+      toast.style.background = 'linear-gradient(135deg, #FF6B6B, #FF4757)';
+      toast.style.color = 'white';
+    } else {
+      toast.style.background = 'linear-gradient(135deg, var(--color-neon-cyan), var(--color-neon-purple))';
+      toast.style.color = '#0A0E27';
+    }
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
   }
 
   async function loadMenu() {
     const drinks = await fetchJSON('/api/available-drinks');
     const container = document.getElementById('menu-list');
-    if (drinks.length === 0) {
-      container.innerHTML = '<p>No drinks available right now. Add some ingredients!</p>';
+    const emptyState = document.getElementById('empty-state');
+
+    if (!drinks || drinks.length === 0) {
+      container.innerHTML = '';
+      emptyState.style.display = 'block';
       return;
     }
-    container.innerHTML = drinks.map(d => `
-      <div class="drink-card">
+
+    emptyState.style.display = 'none';
+    container.innerHTML = drinks.map((d, index) => `
+      <div class="drink-card" style="animation-delay: ${index * 0.1}s">
         <div class="drink-info">
           <h3>${d.name}</h3>
-          <p>${d.description || ''}</p>
-          <small><em>${d.ingredients.map(i => i.name).join(', ')}</em></small>
+          ${d.description ? `<p>${d.description}</p>` : ''}
+          ${d.ingredients && d.ingredients.length > 0 ? `<small>📌 ${d.ingredients.map(i => i.name).join(' • ')}</small>` : ''}
         </div>
-        <button class="primary" onclick="orderDrink(${d.id})">Order</button>
+        <button class="primary" onclick="orderDrink(${d.id})" style="white-space: nowrap;">Order Now</button>
       </div>
     `).join('');
   }
 
   async function orderDrink(drinkId) {
-    await fetchJSON('/api/orders', {
+    const result = await fetchJSON('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drink_id: drinkId })
     });
-    // Show toast
-    const toast = document.getElementById('toast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
+
+    if (result) {
+      showToast('✓ Order Placed');
+    }
   }
 
-  // Poll for menu changes every 5 seconds (in case ingredients change)
+  // Poll for menu changes every 5 seconds
   setInterval(loadMenu, 5000);
   loadMenu();
 </script>

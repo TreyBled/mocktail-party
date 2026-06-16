@@ -8,42 +8,55 @@
 </head>
 <body>
 <div class="container">
-  <h1>🍹 Bartender Panel</h1>
-  
+  <h1>🍹 Bartender Command Center</h1>
+
   <div class="flex-row">
-    <!-- Left column: Ingredients -->
+    <!-- Left column: Ingredients & Drinks -->
     <div class="flex-col">
+      <!-- Wet Ingredients -->
       <div class="card">
-        <h2>Wet Ingredients</h2>
-        <div id="wet-list"></div>
+        <h2>💧 Wet Ingredients</h2>
+        <div id="wet-list" style="min-height: 100px;"></div>
         <hr>
         <form id="add-wet-form">
-          <input type="text" id="wet-name" placeholder="Name" required>
-          <input type="text" id="wet-unit" placeholder="Unit (e.g. ml)">
-          <button type="submit" class="primary">Add Wet</button>
+          <div style="display: flex; gap: 0.8rem;">
+            <input type="text" id="wet-name" placeholder="Name (e.g., lime juice)" required style="flex: 2;">
+            <input type="text" id="wet-unit" placeholder="Unit (ml)" style="flex: 1;">
+            <button type="submit" class="primary" style="white-space: nowrap;">Add</button>
+          </div>
         </form>
       </div>
+
+      <!-- Dry Ingredients -->
       <div class="card">
-        <h2>Dry Ingredients</h2>
-        <div id="dry-list"></div>
+        <h2>🍂 Dry Ingredients</h2>
+        <div id="dry-list" style="min-height: 100px;"></div>
         <hr>
         <form id="add-dry-form">
-          <input type="text" id="dry-name" placeholder="Name" required>
-          <input type="text" id="dry-unit" placeholder="Unit (e.g. g)">
-          <button type="submit" class="primary">Add Dry</button>
+          <div style="display: flex; gap: 0.8rem;">
+            <input type="text" id="dry-name" placeholder="Name (e.g., sugar)" required style="flex: 2;">
+            <input type="text" id="dry-unit" placeholder="Unit (g)" style="flex: 1;">
+            <button type="submit" class="primary" style="white-space: nowrap;">Add</button>
+          </div>
         </form>
       </div>
+
+      <!-- Add New Drink -->
       <div class="card">
-        <h2>Add New Drink</h2>
+        <h2>✨ Create Drink Recipe</h2>
         <form id="add-drink-form">
-          <input type="text" id="drink-name" placeholder="Drink name" required><br><br>
-          <textarea id="drink-desc" placeholder="Description" rows="2"></textarea><br>
-          <textarea id="drink-instr" placeholder="Instructions" rows="2"></textarea><br>
-          <div id="ingredient-selector">
-            <p><strong>Ingredients</strong> (select from available)</p>
-            <div id="ingredient-checkboxes"></div>
+          <input type="text" id="drink-name" placeholder="Drink name" required>
+          
+          <textarea id="drink-desc" placeholder="Brief description" rows="2"></textarea>
+          
+          <textarea id="drink-instr" placeholder="Instructions (how to prepare)" rows="3"></textarea>
+          
+          <div id="ingredient-selector" style="background: rgba(0, 217, 255, 0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(0, 217, 255, 0.1);">
+            <p style="margin-bottom: 1rem;"><strong>Select Ingredients</strong></p>
+            <div id="ingredient-checkboxes" style="max-height: 300px; overflow-y: auto;"></div>
           </div>
-          <button type="submit" class="primary">Add Drink</button>
+          
+          <button type="submit" class="primary" style="margin-top: 0.5rem;">Create Recipe</button>
         </form>
       </div>
     </div>
@@ -53,87 +66,162 @@
       <div class="card">
         <h2>📋 Pending Orders</h2>
         <div id="orders-list" class="orders-sidebar">
-          <p>No orders yet.</p>
+          <p style="text-align: center; color: #8B8680;">No orders yet</p>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="card">
+        <h2>📊 Quick Stats</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="padding: 1rem; background: rgba(0, 217, 255, 0.05); border-radius: 12px; border-left: 3px solid var(--color-neon-cyan);">
+            <div style="color: var(--color-neon-cyan); font-weight: 600; font-size: 1.5rem;" id="wet-count">0</div>
+            <div style="color: #8B8680; font-size: 0.9rem;">Wet Ingredients</div>
+          </div>
+          <div style="padding: 1rem; background: rgba(168, 85, 247, 0.05); border-radius: 12px; border-left: 3px solid var(--color-neon-purple);">
+            <div style="color: var(--color-neon-purple); font-weight: 600; font-size: 1.5rem;" id="dry-count">0</div>
+            <div style="color: #8B8680; font-size: 0.9rem;">Dry Ingredients</div>
+          </div>
+          <div style="padding: 1rem; background: rgba(212, 175, 55, 0.05); border-radius: 12px; border-left: 3px solid var(--color-gold);">
+            <div style="color: var(--color-gold); font-weight: 600; font-size: 1.5rem;" id="drink-count">0</div>
+            <div style="color: #8B8680; font-size: 0.9rem;">Available Drinks</div>
+          </div>
+          <div style="padding: 1rem; background: rgba(31, 79, 63, 0.05); border-radius: 12px; border-left: 3px solid var(--color-emerald);">
+            <div style="color: var(--color-emerald); font-weight: 600; font-size: 1.5rem;" id="order-count">0</div>
+            <div style="color: #8B8680; font-size: 0.9rem;">Pending Orders</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<div id="toast" class="toast">Saved</div>
+
 <script>
   // ---------- Helper functions ----------
   async function fetchJSON(url, options = {}) {
-    const res = await fetch(url, options);
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    } catch (error) {
+      console.error('Error:', error);
+      return null;
+    }
+  }
+
+  function showToast(message = 'Saved') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  }
+
+  function updateStats() {
+    const wetItems = document.querySelectorAll('#wet-list .ingredient-item').length;
+    const dryItems = document.querySelectorAll('#dry-list .ingredient-item').length;
+    const pendingOrders = document.querySelectorAll('#orders-list .order-item').length;
+    
+    document.getElementById('wet-count').textContent = wetItems;
+    document.getElementById('dry-count').textContent = dryItems;
+    document.getElementById('order-count').textContent = pendingOrders;
   }
 
   // ---------- Load ingredients and render checkboxes ----------
   async function loadIngredients() {
     // Wet
     const wet = await fetchJSON('/api/ingredients/wet');
-    const wetContainer = document.getElementById('wet-list');
-    wetContainer.innerHTML = wet.map(i => `
-      <div class="ingredient-item">
-        <label>
-          <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="wet">
-          ${i.name} ${i.unit ? '('+i.unit+')' : ''}
-        </label>
-        <button onclick="toggleIngredient('wet', ${i.id})">Toggle</button>
-      </div>
-    `).join('');
+    if (wet) {
+      const wetContainer = document.getElementById('wet-list');
+      if (wet.length === 0) {
+        wetContainer.innerHTML = '<p style="color: #8B8680; text-align: center;">No wet ingredients yet</p>';
+      } else {
+        wetContainer.innerHTML = wet.map(i => `
+          <div class="ingredient-item">
+            <label>
+              <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="wet" onchange="toggleIngredient('wet', ${i.id})">
+              <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
+            </label>
+          </div>
+        `).join('');
+      }
+    }
 
     // Dry
     const dry = await fetchJSON('/api/ingredients/dry');
-    const dryContainer = document.getElementById('dry-list');
-    dryContainer.innerHTML = dry.map(i => `
-      <div class="ingredient-item">
-        <label>
-          <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="dry">
-          ${i.name} ${i.unit ? '('+i.unit+')' : ''}
-        </label>
-        <button onclick="toggleIngredient('dry', ${i.id})">Toggle</button>
-      </div>
-    `).join('');
+    if (dry) {
+      const dryContainer = document.getElementById('dry-list');
+      if (dry.length === 0) {
+        dryContainer.innerHTML = '<p style="color: #8B8680; text-align: center;">No dry ingredients yet</p>';
+      } else {
+        dryContainer.innerHTML = dry.map(i => `
+          <div class="ingredient-item">
+            <label>
+              <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="dry" onchange="toggleIngredient('dry', ${i.id})">
+              <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
+            </label>
+          </div>
+        `).join('');
+      }
+    }
 
-    // Also populate ingredient checkboxes for "Add Drink"
-    const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
-    const checkDiv = document.getElementById('ingredient-checkboxes');
-    checkDiv.innerHTML = allIngredients.map(ing => `
-      <div>
-        <label>
-          <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}">
-          ${ing.name} (${ing.type})
-        </label>
-      </div>
-    `).join('');
+    // Populate ingredient checkboxes for "Add Drink"
+    if (wet && dry) {
+      const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
+      const checkDiv = document.getElementById('ingredient-checkboxes');
+      if (allIngredients.length === 0) {
+        checkDiv.innerHTML = '<p style="color: #8B8680;">Add ingredients first</p>';
+      } else {
+        checkDiv.innerHTML = allIngredients.map(ing => `
+          <div class="ingredient-item" style="margin: 0.3rem 0;">
+            <label>
+              <input type="checkbox" class="ing-check" data-id="${ing.id}" data-type="${ing.type}">
+              <span>${ing.name} <em>(${ing.type})</em></span>
+            </label>
+          </div>
+        `).join('');
+      }
+    }
+
+    updateStats();
   }
 
   // ---------- Toggle ingredient ----------
   window.toggleIngredient = async function(type, id) {
     await fetchJSON(`/api/ingredients/${type}/${id}/toggle`, { method: 'PUT' });
-    loadIngredients(); // refresh
-    loadOrders(); // in case availability affects orders? not directly, but keep
+    loadIngredients();
+    loadOrders();
   };
 
   // ---------- Load pending orders ----------
   async function loadOrders() {
     const orders = await fetchJSON('/api/orders/pending');
     const container = document.getElementById('orders-list');
-    if (orders.length === 0) {
-      container.innerHTML = '<p>No orders yet.</p>';
+    
+    if (!orders || orders.length === 0) {
+      container.innerHTML = '<p style="text-align: center; color: #8B8680;">No orders yet</p>';
+      updateStats();
       return;
     }
-    container.innerHTML = orders.map(o => `
-      <div class="order-item">
-        <span><strong>${o.drink_name}</strong> <small>${new Date(o.created_at).toLocaleTimeString()}</small></span>
-        <button class="primary" onclick="completeOrder(${o.id})">✔ Done</button>
+
+    container.innerHTML = orders.map((o, index) => `
+      <div class="order-item" style="animation-delay: ${index * 0.05}s">
+        <div style="flex: 1;">
+          <div style="color: var(--color-neon-cyan); font-weight: 600; margin-bottom: 0.3rem;">${o.drink_name}</div>
+          <small style="color: var(--color-text-dim); font-size: 0.8rem;">${new Date(o.created_at).toLocaleTimeString()}</small>
+        </div>
+        <button class="primary" onclick="completeOrder(${o.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem;">✓ Done</button>
       </div>
     `).join('');
+
+    updateStats();
   }
 
   // ---------- Complete order ----------
   window.completeOrder = async function(id) {
     await fetchJSON(`/api/orders/${id}/complete`, { method: 'PUT' });
+    showToast('Order completed');
     loadOrders();
   };
 
@@ -143,13 +231,16 @@
     const name = document.getElementById('wet-name').value.trim();
     const unit = document.getElementById('wet-unit').value.trim();
     if (!name) return;
+
     await fetchJSON('/api/ingredients/wet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
     });
+
     document.getElementById('wet-name').value = '';
     document.getElementById('wet-unit').value = '';
+    showToast('Ingredient added');
     loadIngredients();
   });
 
@@ -158,13 +249,16 @@
     const name = document.getElementById('dry-name').value.trim();
     const unit = document.getElementById('dry-unit').value.trim();
     if (!name) return;
+
     await fetchJSON('/api/ingredients/dry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
     });
+
     document.getElementById('dry-name').value = '';
     document.getElementById('dry-unit').value = '';
+    showToast('Ingredient added');
     loadIngredients();
   });
 
@@ -176,12 +270,11 @@
     const instructions = document.getElementById('drink-instr').value.trim();
     if (!name) return;
 
-    // Gather selected ingredients
     const checkboxes = document.querySelectorAll('.ing-check:checked');
     const ingredients = Array.from(checkboxes).map(cb => ({
       type: cb.dataset.type,
       id: parseInt(cb.dataset.id),
-      quantity: '' // you could add a quantity input later
+      quantity: ''
     }));
 
     if (ingredients.length === 0) {
@@ -189,24 +282,27 @@
       return;
     }
 
-    await fetchJSON('/api/drinks', {
+    const result = await fetchJSON('/api/drinks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, description, instructions, ingredients })
     });
 
-    document.getElementById('drink-name').value = '';
-    document.getElementById('drink-desc').value = '';
-    document.getElementById('drink-instr').value = '';
-    checkboxes.forEach(cb => cb.checked = false);
-    alert('Drink added!');
+    if (result) {
+      document.getElementById('drink-name').value = '';
+      document.getElementById('drink-desc').value = '';
+      document.getElementById('drink-instr').value = '';
+      document.querySelectorAll('.ing-check:checked').forEach(cb => cb.checked = false);
+      showToast('Recipe created!');
+      updateStats();
+    }
   });
 
-  // ---------- Polling for orders (every 2 seconds) ----------
-  function pollOrders() {
+  // ---------- Polling ----------
+  function poll() {
     loadOrders();
   }
-  setInterval(pollOrders, 2000);
+  setInterval(poll, 2000);
 
   // Initial load
   loadIngredients();

@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { query, run, initTables } = require('./db');  // changed import
+const { query, run, initTables } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +15,7 @@ app.use(express.static('public'));
 initTables().catch(err => console.error('DB init error:', err));
 
 // ---------- INGREDIENT ENDPOINTS ----------
+
 // Get all wet ingredients
 app.get('/api/ingredients/wet', async (req, res) => {
   try {
@@ -40,7 +41,6 @@ app.put('/api/ingredients/:type/:id/toggle', async (req, res) => {
   const { type, id } = req.params;
   const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
   try {
-    // Get current status
     const rows = await query(`SELECT is_active FROM ${table} WHERE id = $1`, [id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Ingredient not found' });
     const newStatus = rows[0].is_active ? 0 : 1;
@@ -65,7 +65,38 @@ app.post('/api/ingredients/:type', async (req, res) => {
   }
 });
 
+// UPDATE ingredient (name & unit)
+app.put('/api/ingredients/:type/:id', async (req, res) => {
+  const { type, id } = req.params;
+  const { name, unit } = req.body;
+  const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  try {
+    await run(`UPDATE ${table} SET name = $1, unit = $2 WHERE id = $3`, [name, unit || '', id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE ingredient (and remove from all drink recipes)
+app.delete('/api/ingredients/:type/:id', async (req, res) => {
+  const { type, id } = req.params;
+  const table = type === 'wet' ? 'wet_ingredients' : 'dry_ingredients';
+  try {
+    // Delete all references in drink_ingredients
+    await run('DELETE FROM drink_ingredients WHERE ingredient_type = $1 AND ingredient_id = $2', [type, id]);
+    // Delete the ingredient itself
+    const result = await run(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    if (result.changes === 0) return res.status(404).json({ error: 'Ingredient not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------- DRINK ENDPOINTS ----------
+
 // Get all drinks with their ingredients
 app.get('/api/drinks', async (req, res) => {
   try {
@@ -101,10 +132,8 @@ app.get('/api/available-drinks', async (req, res) => {
         LEFT JOIN dry_ingredients di2 ON di.ingredient_type = 'dry' AND di.ingredient_id = di2.id
         WHERE di.drink_id = $1
       `, [drink.id]);
-      // If any ingredient is inactive or missing, drink is not available
       const allActive = ingredients.every(ing => ing.is_active === 1);
       if (allActive && ingredients.length > 0) {
-        // Re‑attach ingredient names for display
         const fullIngredients = await query(`
           SELECT di.ingredient_type, di.quantity,
                  CASE WHEN di.ingredient_type = 'wet' THEN wi.name ELSE di2.name END as name
@@ -130,13 +159,11 @@ app.post('/api/drinks', async (req, res) => {
     return res.status(400).json({ error: 'Name and ingredients array required' });
   }
   try {
-    // Insert drink
     const result = await run(
       'INSERT INTO drinks (name, description, instructions) VALUES ($1, $2, $3)',
       [name, description || '', instructions || '']
     );
     const drinkId = result.lastID;
-    // Insert each ingredient
     for (let ing of ingredients) {
       const { type, id, quantity } = ing;
       if (!type || !id) continue;
@@ -152,6 +179,7 @@ app.post('/api/drinks', async (req, res) => {
 });
 
 // ---------- ORDER ENDPOINTS ----------
+
 // Create an order
 app.post('/api/orders', async (req, res) => {
   const { drink_id } = req.body;
@@ -191,15 +219,21 @@ app.put('/api/orders/:id/complete', async (req, res) => {
   }
 });
 
-// Serve the two pages
+// ---------- FRONTEND ROUTES ----------
 app.get('/bartender', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'bartender.html'));
 });
+
 app.get('/menu', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'menu.html'));
 });
 
-// Start server
+// Redirect root to bartender (optional)
+app.get('/', (req, res) => {
+  res.redirect('/bartender');
+});
+
+// ---------- START SERVER ----------
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Bartender: http://localhost:${PORT}/bartender`);

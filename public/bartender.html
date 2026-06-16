@@ -5,6 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bartender – Mocktail Party</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Inline editing styles */
+    .ingredient-item.editing .ingredient-display {
+      display: none;
+    }
+    .ingredient-item:not(.editing) .ingredient-edit {
+      display: none;
+    }
+    .ingredient-item .ingredient-edit {
+      display: flex;
+      gap: 0.5rem;
+      flex: 1;
+    }
+    .ingredient-item .ingredient-edit input {
+      flex: 1;
+      margin: 0;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.9rem;
+    }
+    .ingredient-item .ingredient-edit button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .ingredient-item .ingredient-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .ingredient-item .ingredient-actions button {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+  </style>
 </head>
 <body>
 <div class="container">
@@ -138,11 +173,23 @@
         wetContainer.innerHTML = '<p style="color: #8B8680; text-align: center;">No wet ingredients yet</p>';
       } else {
         wetContainer.innerHTML = wet.map(i => `
-          <div class="ingredient-item">
-            <label>
-              <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="wet" onchange="toggleIngredient('wet', ${i.id})">
-              <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
-            </label>
+          <div class="ingredient-item" data-id="${i.id}" data-type="wet" data-name="${i.name}" data-unit="${i.unit || ''}">
+            <div class="ingredient-display" style="display: flex; align-items: center; gap: 0.8rem; flex: 1;">
+              <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; flex: 1;">
+                <input type="checkbox" ${i.is_active ? 'checked' : ''} onchange="toggleIngredient('wet', ${i.id})">
+                <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
+              </label>
+              <div class="ingredient-actions">
+                <button class="edit-btn" onclick="editIngredient(this)">✏️ Edit</button>
+                <button class="danger" onclick="deleteIngredient('wet', ${i.id})" style="padding: 0.4rem 0.8rem;">🗑️</button>
+              </div>
+            </div>
+            <div class="ingredient-edit">
+              <input type="text" class="edit-name" value="${i.name}" placeholder="Name">
+              <input type="text" class="edit-unit" value="${i.unit || ''}" placeholder="Unit">
+              <button class="primary" onclick="saveIngredient(this)">💾 Save</button>
+              <button onclick="cancelEdit(this)">✖ Cancel</button>
+            </div>
           </div>
         `).join('');
       }
@@ -156,11 +203,23 @@
         dryContainer.innerHTML = '<p style="color: #8B8680; text-align: center;">No dry ingredients yet</p>';
       } else {
         dryContainer.innerHTML = dry.map(i => `
-          <div class="ingredient-item">
-            <label>
-              <input type="checkbox" ${i.is_active ? 'checked' : ''} data-id="${i.id}" data-type="dry" onchange="toggleIngredient('dry', ${i.id})">
-              <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
-            </label>
+          <div class="ingredient-item" data-id="${i.id}" data-type="dry" data-name="${i.name}" data-unit="${i.unit || ''}">
+            <div class="ingredient-display" style="display: flex; align-items: center; gap: 0.8rem; flex: 1;">
+              <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; flex: 1;">
+                <input type="checkbox" ${i.is_active ? 'checked' : ''} onchange="toggleIngredient('dry', ${i.id})">
+                <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
+              </label>
+              <div class="ingredient-actions">
+                <button class="edit-btn" onclick="editIngredient(this)">✏️ Edit</button>
+                <button class="danger" onclick="deleteIngredient('dry', ${i.id})" style="padding: 0.4rem 0.8rem;">🗑️</button>
+              </div>
+            </div>
+            <div class="ingredient-edit">
+              <input type="text" class="edit-name" value="${i.name}" placeholder="Name">
+              <input type="text" class="edit-unit" value="${i.unit || ''}" placeholder="Unit">
+              <button class="primary" onclick="saveIngredient(this)">💾 Save</button>
+              <button onclick="cancelEdit(this)">✖ Cancel</button>
+            </div>
           </div>
         `).join('');
       }
@@ -187,7 +246,66 @@
     updateStats();
   }
 
-  // ---------- Toggle ingredient ----------
+  // ---------- Edit / Save / Cancel ----------
+  window.editIngredient = function(btn) {
+    const item = btn.closest('.ingredient-item');
+    item.classList.add('editing');
+    // Focus the name input
+    item.querySelector('.edit-name').focus();
+  };
+
+  window.saveIngredient = async function(btn) {
+    const item = btn.closest('.ingredient-item');
+    const id = item.dataset.id;
+    const type = item.dataset.type;
+    const name = item.querySelector('.edit-name').value.trim();
+    const unit = item.querySelector('.edit-unit').value.trim();
+    if (!name) {
+      alert('Name is required.');
+      return;
+    }
+
+    const result = await fetchJSON(`/api/ingredients/${type}/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, unit })
+    });
+
+    if (result) {
+      showToast('Ingredient updated');
+      // Update displayed data
+      item.dataset.name = name;
+      item.dataset.unit = unit;
+      // Update the display text
+      const displaySpan = item.querySelector('.ingredient-display span');
+      displaySpan.innerHTML = `<strong>${name}</strong>${unit ? ` • ${unit}` : ''}`;
+      item.classList.remove('editing');
+      loadIngredients(); // Refresh checkboxes in drink creator
+    }
+  };
+
+  window.cancelEdit = function(btn) {
+    const item = btn.closest('.ingredient-item');
+    item.classList.remove('editing');
+    // Reset input values to original
+    const name = item.dataset.name;
+    const unit = item.dataset.unit;
+    item.querySelector('.edit-name').value = name;
+    item.querySelector('.edit-unit').value = unit;
+  };
+
+  // ---------- Delete ingredient ----------
+  window.deleteIngredient = async function(type, id) {
+    if (!confirm('Delete this ingredient? It will be removed from all drink recipes.')) return;
+    const result = await fetchJSON(`/api/ingredients/${type}/${id}`, { method: 'DELETE' });
+    if (result) {
+      showToast('Ingredient deleted');
+      loadIngredients();
+      // Also reload checkboxes and stats
+    }
+  };
+
+  // ---------- Toggle ingredient (existing) ----------
   window.toggleIngredient = async function(type, id) {
     await fetchJSON(`/api/ingredients/${type}/${id}/toggle`, { method: 'PUT' });
     loadIngredients();

@@ -54,6 +54,8 @@
       border: 1px solid rgba(0, 217, 255, 0.2);
       border-radius: 12px;
       color: var(--color-text);
+      margin-bottom: 0.5rem;
+      box-sizing: border-box;
     }
     .modal input:focus {
       border-color: var(--color-neon-cyan);
@@ -95,6 +97,7 @@
       align-items: center;
       gap: 0.8rem;
       flex: 1;
+      width: 100%;
     }
     .ingredient-item .ingredient-display label {
       display: flex;
@@ -102,6 +105,7 @@
       gap: 0.6rem;
       cursor: pointer;
       flex: 1;
+      margin: 0;
     }
   </style>
 </head>
@@ -119,9 +123,9 @@
         <hr>
         <form id="add-wet-form">
           <div style="display: flex; gap: 0.8rem;">
-            <input type="text" id="wet-name" placeholder="Name (e.g., lime juice)" required style="flex: 2;">
-            <input type="text" id="wet-unit" placeholder="Unit (ml)" style="flex: 1;">
-            <button type="submit" class="primary" style="white-space: nowrap;">Add</button>
+            <input type="text" id="wet-name" placeholder="Name (e.g., lime juice)" required style="flex: 2; margin: 0;">
+            <input type="text" id="wet-unit" placeholder="Unit (ml)" style="flex: 1; margin: 0;">
+            <button type="submit" class="primary" style="white-space: nowrap; margin: 0;">Add</button>
           </div>
         </form>
       </div>
@@ -133,9 +137,9 @@
         <hr>
         <form id="add-dry-form">
           <div style="display: flex; gap: 0.8rem;">
-            <input type="text" id="dry-name" placeholder="Name (e.g., sugar)" required style="flex: 2;">
-            <input type="text" id="dry-unit" placeholder="Unit (g)" style="flex: 1;">
-            <button type="submit" class="primary" style="white-space: nowrap;">Add</button>
+            <input type="text" id="dry-name" placeholder="Name (e.g., sugar)" required style="flex: 2; margin: 0;">
+            <input type="text" id="dry-unit" placeholder="Unit (g)" style="flex: 1; margin: 0;">
+            <button type="submit" class="primary" style="white-space: nowrap; margin: 0;">Add</button>
           </div>
         </form>
       </div>
@@ -195,14 +199,14 @@
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this) closeModal();">
   <div class="modal">
     <h2>✏️ Edit Ingredient</h2>
-    <form id="edit-form">
+    <form id="edit-form" onsubmit="saveEdit(event)">
       <label for="edit-name">Name</label>
       <input type="text" id="edit-name" required>
       <label for="edit-unit">Unit (optional)</label>
       <input type="text" id="edit-unit" placeholder="e.g., ml, g, oz">
       <div class="modal-actions">
         <button type="button" onclick="closeModal()">Cancel</button>
-        <button type="button" class="primary" onclick="saveEdit()">💾 Save Changes</button>
+        <button type="submit" class="primary">💾 Save Changes</button>
       </div>
     </form>
   </div>
@@ -211,6 +215,9 @@
 <div id="toast" class="toast">Saved</div>
 
 <script>
+  // Store current edit state
+  let currentEdit = { id: null, type: null };
+
   // ---------- Helper functions ----------
   async function fetchJSON(url, options = {}) {
     try {
@@ -223,44 +230,45 @@
     }
   }
 
-  function showToast(message = 'Saved') {
+  function showToast(message = 'Saved', isError = false) {
     const toast = document.getElementById('toast');
     toast.textContent = message;
+    if (isError) {
+      toast.style.background = 'linear-gradient(135deg, #FF6B6B, #FF4757)';
+      toast.style.color = 'white';
+    } else {
+      toast.style.background = 'linear-gradient(135deg, var(--color-neon-cyan), var(--color-neon-purple))';
+      toast.style.color = '#0A0E27';
+    }
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2500);
   }
 
-  // ---------- Modal Control ----------
-  let currentEditId = null;
-  let currentEditType = null;
-
+  // ---------- Modal functions ----------
   function openEditModal(id, type, name, unit) {
-    console.log('Opening edit for:', id, type, name, unit);
-    currentEditId = id;
-    currentEditType = type;
+    currentEdit = { id, type };
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-unit').value = unit || '';
     document.getElementById('editModal').classList.add('active');
-    document.getElementById('edit-name').focus();
   }
 
   function closeModal() {
     document.getElementById('editModal').classList.remove('active');
-    currentEditId = null;
-    currentEditType = null;
+    currentEdit = { id: null, type: null };
   }
 
-  async function saveEdit() {
+  async function saveEdit(e) {
+    e.preventDefault();
     const name = document.getElementById('edit-name').value.trim();
     const unit = document.getElementById('edit-unit').value.trim();
+    const { id, type } = currentEdit;
+
     if (!name) {
-      alert('Name is required.');
+      showToast('Name is required', true);
       return;
     }
 
-    console.log('Saving edit:', currentEditType, currentEditId, name, unit);
-
-    const result = await fetchJSON(`/api/ingredients/${currentEditType}/${currentEditId}`, {
+    const result = await fetchJSON(`/api/ingredients/${type}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
@@ -269,10 +277,9 @@
     if (result && result.success) {
       showToast('Ingredient updated');
       closeModal();
-      loadIngredients(); // refresh lists
+      loadIngredients();
     } else {
-      showToast('Update failed. Check console.', true);
-      console.error('Update error:', result);
+      showToast('Failed to update ingredient', true);
     }
   }
 
@@ -293,8 +300,8 @@
                 <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
               </label>
               <div class="ingredient-actions">
-                <button onclick="openEditModal(${i.id}, 'wet', '${i.name.replace(/'/g, "\\'")}', '${(i.unit || '').replace(/'/g, "\\'")}')">✏️ Edit</button>
-                <button class="danger" onclick="deleteIngredient('wet', ${i.id})" style="padding: 0.4rem 0.8rem;">🗑️</button>
+                <button type="button" onclick="openEditModal(${i.id}, 'wet', '${i.name.replace(/'/g, "\\'")}', '${(i.unit || '').replace(/'/g, "\\'")}')" style="margin: 0;">✏️</button>
+                <button type="button" class="danger" onclick="deleteIngredient('wet', ${i.id})" style="padding: 0.4rem 0.8rem; margin: 0;">🗑️</button>
               </div>
             </div>
           </div>
@@ -317,8 +324,8 @@
                 <span><strong>${i.name}</strong>${i.unit ? ` • ${i.unit}` : ''}</span>
               </label>
               <div class="ingredient-actions">
-                <button onclick="openEditModal(${i.id}, 'dry', '${i.name.replace(/'/g, "\\'")}', '${(i.unit || '').replace(/'/g, "\\'")}')">✏️ Edit</button>
-                <button class="danger" onclick="deleteIngredient('dry', ${i.id})" style="padding: 0.4rem 0.8rem;">🗑️</button>
+                <button type="button" onclick="openEditModal(${i.id}, 'dry', '${i.name.replace(/'/g, "\\'")}', '${(i.unit || '').replace(/'/g, "\\'")}')" style="margin: 0;">✏️</button>
+                <button type="button" class="danger" onclick="deleteIngredient('dry', ${i.id})" style="padding: 0.4rem 0.8rem; margin: 0;">🗑️</button>
               </div>
             </div>
           </div>
@@ -349,9 +356,11 @@
 
   // ---------- Toggle ingredient ----------
   window.toggleIngredient = async function(type, id) {
-    await fetchJSON(`/api/ingredients/${type}/${id}/toggle`, { method: 'PUT' });
-    loadIngredients();
-    loadOrders();
+    const result = await fetchJSON(`/api/ingredients/${type}/${id}/toggle`, { method: 'PUT' });
+    if (result) {
+      loadIngredients();
+      loadOrders();
+    }
   };
 
   // ---------- Delete ingredient ----------
@@ -383,7 +392,7 @@
           <div style="color: var(--color-neon-cyan); font-weight: 600; margin-bottom: 0.3rem;">${o.drink_name}</div>
           <small style="color: var(--color-text-dim); font-size: 0.8rem;">${new Date(o.created_at).toLocaleTimeString()}</small>
         </div>
-        <button class="primary" onclick="completeOrder(${o.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem;">✓ Done</button>
+        <button type="button" class="primary" onclick="completeOrder(${o.id})" style="padding: 0.5rem 1rem; font-size: 0.85rem; margin: 0;">✓ Done</button>
       </div>
     `).join('');
 
@@ -391,9 +400,11 @@
   }
 
   window.completeOrder = async function(id) {
-    await fetchJSON(`/api/orders/${id}/complete`, { method: 'PUT' });
-    showToast('Order completed');
-    loadOrders();
+    const result = await fetchJSON(`/api/orders/${id}/complete`, { method: 'PUT' });
+    if (result && result.success) {
+      showToast('Order completed');
+      loadOrders();
+    }
   };
 
   // ---------- Add ingredient forms ----------
@@ -403,16 +414,20 @@
     const unit = document.getElementById('wet-unit').value.trim();
     if (!name) return;
 
-    await fetchJSON('/api/ingredients/wet', {
+    const result = await fetchJSON('/api/ingredients/wet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
     });
 
-    document.getElementById('wet-name').value = '';
-    document.getElementById('wet-unit').value = '';
-    showToast('Ingredient added');
-    loadIngredients();
+    if (result && result.id) {
+      document.getElementById('wet-name').value = '';
+      document.getElementById('wet-unit').value = '';
+      showToast('Ingredient added');
+      loadIngredients();
+    } else {
+      showToast('Failed to add ingredient', true);
+    }
   });
 
   document.getElementById('add-dry-form').addEventListener('submit', async (e) => {
@@ -421,16 +436,20 @@
     const unit = document.getElementById('dry-unit').value.trim();
     if (!name) return;
 
-    await fetchJSON('/api/ingredients/dry', {
+    const result = await fetchJSON('/api/ingredients/dry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, unit })
     });
 
-    document.getElementById('dry-name').value = '';
-    document.getElementById('dry-unit').value = '';
-    showToast('Ingredient added');
-    loadIngredients();
+    if (result && result.id) {
+      document.getElementById('dry-name').value = '';
+      document.getElementById('dry-unit').value = '';
+      showToast('Ingredient added');
+      loadIngredients();
+    } else {
+      showToast('Failed to add ingredient', true);
+    }
   });
 
   // ---------- Add drink form ----------
@@ -449,7 +468,7 @@
     }));
 
     if (ingredients.length === 0) {
-      alert('Please select at least one ingredient.');
+      showToast('Please select at least one ingredient', true);
       return;
     }
 

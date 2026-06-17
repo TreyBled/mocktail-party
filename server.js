@@ -89,6 +89,25 @@ app.delete('/api/ingredients/:type/:id', async (req, res) => {
   }
 });
 
+// ---------- BATCH DEACTIVATE (new) ----------
+app.post('/api/ingredients/wet/deactivate-all', async (req, res) => {
+  try {
+    await run('UPDATE wet_ingredients SET is_active = 0');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ingredients/dry/deactivate-all', async (req, res) => {
+  try {
+    await run('UPDATE dry_ingredients SET is_active = 0');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------- DRINK ENDPOINTS ----------
 
 app.get('/api/drinks', async (req, res) => {

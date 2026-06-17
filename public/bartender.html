@@ -169,7 +169,6 @@
       opacity: 0.7;
     }
 
-    /* Order items clickable */
     .order-item {
       cursor: pointer;
       transition: all 0.2s ease;
@@ -196,6 +195,21 @@
       color: var(--color-text-dim);
       font-size: 0.9rem;
     }
+
+    /* Section header with button */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .section-header h2 {
+      margin: 0;
+    }
+    .section-header button {
+      padding: 0.3rem 1rem;
+      font-size: 0.8rem;
+    }
   </style>
 </head>
 <body>
@@ -207,7 +221,10 @@
     <div class="flex-col">
       <!-- Wet Ingredients -->
       <div class="card">
-        <h2>💧 Wet Ingredients</h2>
+        <div class="section-header">
+          <h2>💧 Wet Ingredients</h2>
+          <button type="button" class="danger" onclick="deactivateAll('wet')">Uncheck All</button>
+        </div>
         <input type="text" id="wet-search" class="search-input" placeholder="🔍 Search wet ingredients...">
         <div id="wet-list" style="min-height: 100px;"></div>
         <hr>
@@ -222,7 +239,10 @@
 
       <!-- Dry Ingredients -->
       <div class="card">
-        <h2>🍂 Dry Ingredients</h2>
+        <div class="section-header">
+          <h2>🍂 Dry Ingredients</h2>
+          <button type="button" class="danger" onclick="deactivateAll('dry')">Uncheck All</button>
+        </div>
         <input type="text" id="dry-search" class="search-input" placeholder="🔍 Search dry ingredients...">
         <div id="dry-list" style="min-height: 100px;"></div>
         <hr>
@@ -251,7 +271,7 @@
         </form>
       </div>
 
-      <!-- NEW: Available Drinks List -->
+      <!-- Available Drinks List -->
       <div class="card">
         <h2>📋 All Available Drinks</h2>
         <input type="text" id="drink-search" class="search-input" placeholder="🔍 Search drinks...">
@@ -435,7 +455,6 @@
   }
 
   document.addEventListener('DOMContentLoaded', function() {
-    // Wet search
     document.getElementById('wet-search').addEventListener('input', function() {
       filterList('wet-list', 'wet-search', '.ingredient-item', 'span strong');
     });
@@ -450,11 +469,22 @@
     });
   });
 
+  // ---------- Deactivate All ----------
+  async function deactivateAll(type) {
+    if (!confirm(`⚠️ Deactivate all ${type} ingredients? This will make them unavailable for drinks.`)) return;
+    const result = await fetchJSON(`/api/ingredients/${type}/deactivate-all`, { method: 'POST' });
+    if (result && result.success) {
+      showToast(`All ${type} ingredients deactivated`);
+      loadIngredients();
+    } else {
+      showToast('Failed to deactivate all', true);
+    }
+  }
+
   // ---------- Load ingredients ----------
   async function loadIngredients() {
     const now = Date.now();
 
-    // Wet
     const wet = await fetchJSON(`/api/ingredients/wet?_=${now}`);
     if (wet) {
       const wetContainer = document.getElementById('wet-list');
@@ -479,7 +509,6 @@
       }
     }
 
-    // Dry
     const dry = await fetchJSON(`/api/ingredients/dry?_=${now}`);
     if (dry) {
       const dryContainer = document.getElementById('dry-list');
@@ -504,7 +533,6 @@
       }
     }
 
-    // Populate ingredient checkboxes
     if (wet && dry) {
       const allIngredients = [...wet.map(w => ({...w, type:'wet'})), ...dry.map(d => ({...d, type:'dry'}))];
       const checkDiv = document.getElementById('ingredient-checkboxes');
@@ -525,9 +553,7 @@
       }
     }
 
-    // Also load available drinks list
     loadAvailableDrinks();
-
     updateStats();
   }
 
@@ -587,7 +613,6 @@
       </div>
     `).join('');
 
-    // Only update if changed
     if (html !== lastOrdersData) {
       container.innerHTML = html;
       lastOrdersData = html;
@@ -636,7 +661,6 @@
     if (html !== lastAvailableDrinksData) {
       container.innerHTML = html;
       lastAvailableDrinksData = html;
-      // Re-apply drink search filter
       filterList('available-drinks-list', 'drink-search', '.drink-list-item', '.drink-name');
     }
   }
@@ -729,7 +753,7 @@
         qtyInput.value = '';
       });
       showToast('Recipe created!');
-      loadIngredients(); // refresh available drinks list
+      loadIngredients();
       updateStats();
     } else {
       showToast('Failed to create recipe.', true);
